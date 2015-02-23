@@ -23,6 +23,7 @@ class Parser():
 
     def formula(self):
         for token in self.tokens:
+            print(token)
             print(self.out_stack)
             print(self.op_stack)
             print('---')
@@ -41,12 +42,13 @@ class Parser():
             elif token == ')':
                 while self.op_stack and self.op_stack[-1] != '(':
                     #self.out_stack.append(self.op_stack.pop())
-                    self.out_stack.append(Node(self.op_stack.pop(), [self.out_stack.pop(), self.out_stack.pop()]))
-
-                if self.op_stack:
                     if self.op_stack[-1] == '-':
                         #self.out_stack.append(self.op_stack.pop())
-                        self.out_stack.append = Node(self.op_stack.pop(), self.out_stack.pop())
+                        self.out_stack.append(Node(self.op_stack.pop(), self.out_stack.pop()))
+                    else:
+                        self.out_stack.append(Node(self.op_stack.pop(), [self.out_stack.pop(), self.out_stack.pop()]))
+
+                if self.op_stack:
                     self.op_stack.pop()
                 else:
                     print("Mismatched parenthesis")
