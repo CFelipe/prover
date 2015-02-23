@@ -6,9 +6,12 @@ def is_term(t):
     return re.match(r"[A-Z]+[0-9]*", t) is not None
 
 class Node():
-    def __init__(self):
-        self.children = []
-        self.data = None
+    def __init__(self, root, children):
+        self.root = root
+        self.children = children
+
+    def __repr__(self):
+        return "R: " + self.root + ", C: " + str(self.children)
 
 class Parser():
     def __init__(self, formula):
@@ -16,15 +19,7 @@ class Parser():
         self.tokens = formula.replace('(', ' ( ').replace(')', ' ) ').split()
         self.op_stack = []
         self.out_stack = []
-        self.idx = 0
-
-    def peek(self, i = 0):
-        if self.idx + i < len(self.tokens):
-            print(self.tokens[self.idx + i])
-            return self.tokens[self.idx + i]
-
-    def consume(self):
-        self.idx = self.idx + 1
+        self.tree = None
 
     def formula(self):
         for token in self.tokens:
@@ -45,11 +40,13 @@ class Parser():
                 self.op_stack.append(token)
             elif token == ')':
                 while self.op_stack and self.op_stack[-1] != '(':
-                    self.out_stack.append(self.op_stack.pop())
+                    #self.out_stack.append(self.op_stack.pop())
+                    self.out_stack.append(Node(self.op_stack.pop(), [self.out_stack.pop(), self.out_stack.pop()]))
 
                 if self.op_stack:
                     if self.op_stack[-1] == '-':
-                        self.out_stack.append(self.op_stack.pop())
+                        #self.out_stack.append(self.op_stack.pop())
+                        self.out_stack.append = Node(self.op_stack.pop(), self.out_stack.pop())
                     self.op_stack.pop()
                 else:
                     print("Mismatched parenthesis")
@@ -65,7 +62,7 @@ class Parser():
                 print("Mismatched parenthesis")
                 return
 
-        return self.out_stack
+        return self.out_stack[0]
 
 def main(argv=None):
     if argv:
@@ -74,24 +71,6 @@ def main(argv=None):
     rpn = Parser(astr).formula()
     rpn_stack = []
     print(rpn)
-
-    result = []
-
-    for token in rpn:
-        if is_term(token):
-            rpn_stack.append(token)
-        else:
-            if token == '-':
-                op = rpn_stack.pop()
-            elif token == '|':
-                op1 = rpn_stack.pop()
-                op2 = rpn_stack.pop()
-            elif token == '=>':
-                op1 = rpn_stack.pop()
-                op2 = rpn_stack.pop()
-            elif token == '<=>':
-                op1 = rpn_stack.pop()
-                op2 = rpn_stack.pop()
 
 if __name__ == "__main__":
     main(sys.argv[1:])
