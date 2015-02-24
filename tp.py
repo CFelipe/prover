@@ -11,12 +11,15 @@ class Node():
         self.children = children
 
     def __repr__(self):
-        return "R: " + self.root + ", C: " + str(self.children)
+        return "{R: " + self.root + ", C: " + str(self.children) + "}"
 
 class Parser():
     def __init__(self, formula):
         # Taken from Norvig's "(How to Write a (Lisp) Interpreter (in Python))"
-        self.tokens = formula.replace('(', ' ( ').replace(')', ' ) ').split()
+        self.tokens = formula.replace('(', ' ( ') \
+                             .replace(')', ' ) ') \
+                             .replace('-', ' - ') \
+                             .split()
         self.op_stack = []
         self.out_stack = []
         self.tree = None
@@ -41,12 +44,22 @@ class Parser():
                 self.op_stack.append(token)
             elif token == ')':
                 while self.op_stack and self.op_stack[-1] != '(':
-                    #self.out_stack.append(self.op_stack.pop())
                     if self.op_stack[-1] == '-':
-                        #self.out_stack.append(self.op_stack.pop())
-                        self.out_stack.append(Node(self.op_stack.pop(), self.out_stack.pop()))
+                        try:
+                            self.out_stack.append(Node(self.op_stack.pop(),
+                                                self.out_stack.pop()))
+                        except:
+                            print("Invalid format")
+                            return
+
                     else:
-                        self.out_stack.append(Node(self.op_stack.pop(), [self.out_stack.pop(), self.out_stack.pop()]))
+                        try:
+                            self.out_stack.append(Node(self.op_stack.pop(),
+                                                [self.out_stack.pop(),
+                                                self.out_stack.pop()][::-1]))
+                        except:
+                            print("Invalid format")
+                            return
 
                 if self.op_stack:
                     self.op_stack.pop()
@@ -64,15 +77,18 @@ class Parser():
                 print("Mismatched parenthesis")
                 return
 
-        return self.out_stack[0]
+        if len(self.out_stack) == 1:
+            return self.out_stack[0]
+        else:
+            print("Invalid format")
+            return None
 
 def main(argv=None):
     if argv:
         astr = argv[0]
 
-    rpn = Parser(astr).formula()
-    rpn_stack = []
-    print(rpn)
+    ast = Parser(astr).formula()
+    print(ast)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
