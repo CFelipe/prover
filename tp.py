@@ -1,6 +1,7 @@
 import re
 import argparse
 import sys
+from copy import deepcopy
 
 def is_term(t):
     return re.match(r"[A-Z]+[0-9]*", t) is not None
@@ -14,7 +15,7 @@ def print_tree(node, level = 0):
         else:
             print("." * 4 * level + node)
 
-class Node():
+class Node(object):
     def __init__(self, root, children):
         self.root = root
         self.children = children
@@ -24,9 +25,9 @@ class Node():
 
 def parse(astr):
     # Taken from Norvig's "(How to Write a (Lisp) Interpreter (in Python))"
-    tokens = astr.replace('(', ' ( ') \
-                 .replace(')', ' ) ') \
-                 .replace('-', ' - ') \
+    tokens = astr.replace("(", " ( ") \
+                 .replace(")", " ) ") \
+                 .replace("-", " - ") \
                  .split()
     op_stack = []
     out_stack = []
@@ -35,25 +36,34 @@ def parse(astr):
         print(token)
         print(out_stack)
         print(op_stack)
-        print('---')
+        print("---")
 
         if is_term(token):
             out_stack.append(token)
-        elif token == '-':
+        elif token == "-":
             op_stack.append(token)
-        elif token in ['<=>',
-                        '=>',
-                        '|',
-                        '&']:
+        elif token in ["<=>",
+                       "=>",
+                       "|",
+                       "&"]:
+            while op_stack and op_stack[-1] == "-":
+                try:
+                    out_stack.append(Node(op_stack.pop(),
+                                            [out_stack.pop()]))
+                except:
+                    print("Invalid format")
+                    return
+
             op_stack.append(token)
-        elif token == '(':
+
+        elif token == "(":
             op_stack.append(token)
-        elif token == ')':
-            while op_stack and op_stack[-1] != '(':
-                if op_stack[-1] == '-':
+        elif token == ")":
+            while op_stack and op_stack[-1] != "(":
+                if op_stack[-1] == "-":
                     try:
                         out_stack.append(Node(op_stack.pop(),
-                                            out_stack.pop()))
+                                              [out_stack.pop()]))
                     except:
                         print("Invalid format")
                         return
@@ -61,8 +71,8 @@ def parse(astr):
                 else:
                     try:
                         out_stack.append(Node(op_stack.pop(),
-                                            [out_stack.pop(),
-                                            out_stack.pop()][::-1]))
+                                             [out_stack.pop(),
+                                             out_stack.pop()][::-1]))
                     except:
                         print("Invalid format")
                         return
@@ -89,11 +99,33 @@ def parse(astr):
         print("Invalid format")
         return
 
+def trav1(node):
+    if type(node) == Node:
+        if node.root == "=>":
+            node.root = "|"
+            node.children[0] = Node("-", [node.children[0]])
+        elif node.root == "<=>":
+            node.root = "&"
+            #node.children = [Node("=>", [node.children[0], node.children[1]]),
+                             #Node("=>", [node.children[1], node.children[0]])]
+            node.children = [Node("|", [Node("-", [node.children[0]]), node.children[1]]),
+                             Node("|", [Node("-", [node.children[1]]), node.children[0]])]
+
+        for n in node.children:
+            trav1(n)
+
+def cnfize(ast):
+    trav1(ast)
+
 def main(argv=None):
     if argv:
         astr = argv[0]
 
     ast = parse(astr)
+    print(ast)
+    print_tree(ast)
+    cnfize(ast)
+    print(ast)
     print_tree(ast)
 
 if __name__ == "__main__":
