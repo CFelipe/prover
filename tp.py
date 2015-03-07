@@ -2,6 +2,12 @@ import re
 import argparse
 import sys
 
+class ParseException(Exception):
+    def __init__(self, msg):
+        self.msg = msg
+    def __str__(self):
+        return self.msg
+
 def is_op(t):
     return t in ["<=>", "=>", "|", "&"]
 
@@ -54,8 +60,7 @@ def parse(astr):
                     out_stack.append(Node(op_stack.pop(),
                                             [Node(out_stack.pop())]))
                 except:
-                    print("Invalid format")
-                    return
+                    raise ParseException("Invalid format")
 
             op_stack.append(token)
 
@@ -68,8 +73,7 @@ def parse(astr):
                         out_stack.append(Node(op_stack.pop(),
                                               [Node(out_stack.pop())]))
                     except:
-                        print("Invalid format")
-                        return
+                        raise ParseException("Invalid format")
 
                 else:
                     try:
@@ -79,30 +83,25 @@ def parse(astr):
                                              [Node(out_stack.pop()),
                                               Node(out_stack.pop())][::-1]))
                     except:
-                        print("Invalid format")
-                        return
+                        raise ParseException("Invalid format")
 
             if op_stack:
                 op_stack.pop()
             else:
-                print("Mismatched parenthesis")
-                return
+                raise ParseException("Mismatched parenthesis")
         else:
-            print("Invalid token:", token)
-            return
+            raise ParseException("Invalid token: "+ token)
 
     while op_stack:
         if op_stack[-1] != '(':
             out_stack.append(op_stack.pop())
         else:
-            print("Mismatched parenthesis")
-            return
+            raise ParseException("Mismatched parenthesis")
 
     if len(out_stack) == 1:
         return out_stack[0]
     else:
-        print("Invalid format")
-        return
+        raise ParseException("Invalid format")
 
 def trav1(node):
     if node.root == "=>":
@@ -136,9 +135,24 @@ def trav2(node):
     for n in node.children:
         trav2(n)
 
+def trav3(node):
+    if node.root == "|":
+        ch = node.children
+        if ch[0].root == '&':
+            new_node = Node("&", [Node('|', Node(ch[1]), Node(ch[0][0])),
+                                  Node('|', Node(ch[1]), Node(ch[0][1]))])
+            node.root = new_node.root
+            node.children = new_node.children
+        elif ch[1].root == '&':
+            new_node = Node("&", [Node('|', Node(ch[0]), Node(ch[1][0])),
+                                  Node('|', Node(ch[0]), Node(ch[1][1]))])
+            node.root = new_node.root
+            node.children = new_node.children
+
 def cnfize(ast):
     trav1(ast)
     trav2(ast)
+    trav3(ast)
 
 def main(argv=None):
     if argv:
