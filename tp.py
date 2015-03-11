@@ -107,6 +107,8 @@ def parse(astr):
         raise ParseException("Invalid format")
 
 def trav1(node):
+    """Equivalence and implication"""
+
     if node.root == "=>":
         node.root = "|"
         node.children[0] = Node("-", [Node(node.children[0])])
@@ -119,6 +121,8 @@ def trav1(node):
         trav1(n)
 
 def trav2(node):
+    """De Morgan and Double Negation"""
+
     if node.root == "-":
         ch = node.children[0]
         if not is_term(ch.root):
@@ -139,8 +143,7 @@ def trav2(node):
         trav2(n)
 
 def trav3(node):
-    for n in node.children:
-        trav3(n)
+    """Distributivity disjunction"""
 
     if node.root == "|":
         ch = node.children
@@ -149,33 +152,39 @@ def trav3(node):
                                   Node('|', [Node(ch[1]), Node(ch[0].children[1])])])
             node.root = new_node.root
             node.children = new_node.children
+            trav3(node)
         elif ch[1].root == '&':
             new_node = Node("&", [Node('|', [Node(ch[0]), Node(ch[1].children[0])]),
                                   Node('|', [Node(ch[0]), Node(ch[1].children[1])])])
             node.root = new_node.root
             node.children = new_node.children
+            trav3(node)
+
+    for n in node.children:
+        trav3(n)
 
 def clauses(node, sets=[]):
     if node.root == "&":
         for n in node.children:
             clauses(n, sets)
     elif node.root == "|":
-        l = []
+        l = set()
         for n in node.children:
             add_clause(n, l)
-        sets.append(l)
+        if l not in sets: sets.append(l)
     elif is_term(node.root):
-        l = []
+        l = set()
         add_clause(node, l)
-        sets.append(l)
+        if l not in sets: sets.append(l)
 
     return sets
 
 def add_clause(node, clauses):
     if is_term(node.root):
-        clauses.append(node.root)
+        clauses.add(node.root)
     elif node.root == "-":
-        clauses.append("-" + node.children[0].root)
+        neg = "-" + node.children[0].root
+        clauses.add(neg)
     elif node.root == "|":
         for n in node.children:
             add_clause(n, clauses)
@@ -193,13 +202,13 @@ def cnfize(ast):
 def main(argv=None):
     if argv:
         astr = argv[0]
-
-    ast = parse(astr)
-    print("AST")
-    print_tree(ast)
-    print("CNFized")
-    print(cnfize(ast))
-    print_tree(ast)
+        ast = parse(astr)
+        print("AST")
+        print_tree(ast)
+        print("CNFized")
+        clauses = cnfize(ast)
+        print_tree(ast)
+        print(clauses)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
