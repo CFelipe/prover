@@ -41,6 +41,8 @@ def parse(astr):
                  .replace(")", " ) ") \
                  .replace("-", " - ") \
                  .split()
+    tokens.insert(0, "(")
+    tokens.append(")")
     op_stack = []
     out_stack = []
 
@@ -58,7 +60,7 @@ def parse(astr):
             while op_stack and op_stack[-1] == "-":
                 try:
                     out_stack.append(Node(op_stack.pop(),
-                                            [Node(out_stack.pop())]))
+                                    [Node(out_stack.pop())]))
                 except:
                     raise ParseException("Invalid format")
 
@@ -74,7 +76,6 @@ def parse(astr):
                                               [Node(out_stack.pop())]))
                     except:
                         raise ParseException("Invalid format")
-
                 else:
                     try:
                         print(op_stack)
@@ -99,6 +100,8 @@ def parse(astr):
             raise ParseException("Mismatched parenthesis")
 
     if len(out_stack) == 1:
+        if type(out_stack[0]) == str:
+            out_stack.append(Node(out_stack.pop(), []))
         return out_stack[0]
     else:
         raise ParseException("Invalid format")
@@ -110,7 +113,7 @@ def trav1(node):
     elif node.root == "<=>":
         node.root = "&"
         node.children = [Node("|", [Node("-", [node.children[0]]), Node(node.children[1])]),
-                            Node("|", [Node("-", [node.children[1]]), Node(node.children[0])])]
+                         Node("|", [Node("-", [node.children[1]]), Node(node.children[0])])]
 
     for n in node.children:
         trav1(n)
@@ -136,33 +139,66 @@ def trav2(node):
         trav2(n)
 
 def trav3(node):
+    for n in node.children:
+        trav3(n)
+
     if node.root == "|":
         ch = node.children
         if ch[0].root == '&':
-            new_node = Node("&", [Node('|', Node(ch[1]), Node(ch[0][0])),
-                                  Node('|', Node(ch[1]), Node(ch[0][1]))])
+            new_node = Node("&", [Node('|', [Node(ch[1]), Node(ch[0].children[0])]),
+                                  Node('|', [Node(ch[1]), Node(ch[0].children[1])])])
             node.root = new_node.root
             node.children = new_node.children
         elif ch[1].root == '&':
-            new_node = Node("&", [Node('|', Node(ch[0]), Node(ch[1][0])),
-                                  Node('|', Node(ch[0]), Node(ch[1][1]))])
+            new_node = Node("&", [Node('|', [Node(ch[0]), Node(ch[1].children[0])]),
+                                  Node('|', [Node(ch[0]), Node(ch[1].children[1])])])
             node.root = new_node.root
             node.children = new_node.children
+
+def clauses(node, sets=[]):
+    if node.root == "&":
+        for n in node.children:
+            clauses(n, sets)
+    elif node.root == "|":
+        l = []
+        for n in node.children:
+            add_clause(n, l)
+        sets.append(l)
+    elif is_term(node.root):
+        l = []
+        add_clause(node, l)
+        sets.append(l)
+
+    return sets
+
+def add_clause(node, clauses):
+    if is_term(node.root):
+        clauses.append(node.root)
+    elif node.root == "-":
+        clauses.append("-" + node.children[0].root)
+    elif node.root == "|":
+        for n in node.children:
+            add_clause(n, clauses)
+    else:
+        print(type(node.root))
+        print(node.root)
 
 def cnfize(ast):
     trav1(ast)
     trav2(ast)
     trav3(ast)
 
+    return clauses(ast)
+
 def main(argv=None):
     if argv:
         astr = argv[0]
 
     ast = parse(astr)
-    print(ast)
+    print("AST")
     print_tree(ast)
-    cnfize(ast)
-    print(ast)
+    print("CNFized")
+    print(cnfize(ast))
     print_tree(ast)
 
 if __name__ == "__main__":
