@@ -199,6 +199,32 @@ def cnfize(ast):
 
     return clauses(ast)
 
+def negation(term):
+    if term[0] == "-":
+        return term[1:]
+    else:
+        return "-" + term
+
+def resolve(clauses):
+    changed = True
+    while changed:
+        print('---')
+        changed = False
+        clauses = sorted(clauses, key=len)
+        print(clauses)
+        for i, c1 in enumerate(clauses):
+            for t1 in c1:
+                for c2 in clauses[i:]:
+                    for t2 in c2:
+                        if negation(t1) == t2:
+                            resolvent = c1.union(c2).difference({t1, t2})
+                            if resolvent == set():
+                                return True
+                            print("Resolvent", resolvent)
+                            if resolvent not in clauses:
+                                clauses.append(resolvent)
+                                changed = True
+
 def main(argv=None):
     if argv:
         astr = argv[0]
@@ -209,6 +235,7 @@ def main(argv=None):
         clauses = cnfize(ast)
         print_tree(ast)
         print(clauses)
+        print(resolve(clauses))
 
 if __name__ == "__main__":
     main(sys.argv[1:])
