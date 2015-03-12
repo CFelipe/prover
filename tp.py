@@ -2,6 +2,8 @@ import re
 import argparse
 import sys
 
+# Helpers ---------------------------------------------------------------------
+
 class ParseException(Exception):
     def __init__(self, msg):
         self.msg = msg
@@ -20,6 +22,22 @@ def print_tree(node, level = 0):
         for n in node.children:
             print_tree(n, level + 1)
 
+def longest_term(clauses):
+    longest = 0
+    for clause in clauses:
+        for term in clause:
+            if len(term) > longest: longest = len(term)
+    return longest
+
+def print_clauses(clauses):
+    print("{")
+    w = longest_term(clauses)
+    for clause in clauses:
+        sorted_clauses = sorted(clause,
+                                key = lambda c: c[1:] if c[0] == "-" else c)
+        print("  {", ', '.join("{0:>{1}}".format(x, w) for x in sorted_clauses), "}", sep = "")
+    print("}")
+
 class Node(object):
     def __init__(self, root, children=[]):
         if type(root) == str:
@@ -34,6 +52,8 @@ class Node(object):
 
     def __repr__(self):
         return "{R: " + self.root + ", C: " + str(self.children) + "}"
+
+# Procedure -------------------------------------------------------------------
 
 def parse(astr):
     # Taken from Norvig's "(How to Write a (Lisp) Interpreter (in Python))"
@@ -207,6 +227,7 @@ def negation(term):
 
 def resolve(clauses):
     print("---")
+    # Try to resolve smaller clauses first
     clauses = sorted(clauses, key=len)
     for i, c1 in enumerate(clauses):
         for t1 in c1:
@@ -217,18 +238,17 @@ def resolve(clauses):
                         if resolvent == set():
                             return True
                         elif resolvent not in clauses:
-                            print(clauses)
+                            print_clauses(clauses)
+                            print(longest_term(clauses))
                             print("res", resolvent)
                             clauses.append(resolvent)
                             print("t1", t1)
                             print("t2", t2)
                             print("c1", c1)
                             print("c2", c2)
-                            print(clauses)
                             clauses.remove(c1)
                             if c1 != c2:
                                 clauses.remove(c2)
-                            print(clauses)
                             return(resolve(clauses))
     return False
 
@@ -242,7 +262,7 @@ def main(argv=None):
         print("CNFized")
         clauses = cnfize(ast)
         print_tree(ast)
-        print(clauses)
+        print_clauses(clauses)
         print(resolve(clauses))
 
 if __name__ == "__main__":
