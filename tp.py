@@ -10,6 +10,11 @@ class ParseException(Exception):
     def __str__(self):
         return self.msg
 
+def print_header(text):
+    print("\n", "-" * len(text), sep = "")
+    print(text)
+    print("-" * len(text), "\n", sep = "")
+
 def is_op(t):
     return t in ["<=>", "=>", "|", "&"]
 
@@ -22,6 +27,12 @@ def print_tree(node, level = 0):
         for n in node.children:
             print_tree(n, level + 1)
 
+def negation(term):
+    if term[0] == "-":
+        return term[1:]
+    else:
+        return "-" + term
+
 def longest_term(clauses):
     longest = 0
     for clause in clauses:
@@ -29,13 +40,18 @@ def longest_term(clauses):
             if len(term) > longest: longest = len(term)
     return longest
 
-def print_clauses(clauses):
+def print_clauses(clauses, c1=None, c2=None):
     print("{")
     w = longest_term(clauses)
     for clause in clauses:
         sorted_clauses = sorted(clause,
-                                key = lambda c: c[1:] if c[0] == "-" else c)
-        print("  {", ', '.join("{0:>{1}}".format(x, w) for x in sorted_clauses), "}", sep = "")
+                                key = lambda x: x[1:] if x[0] == "-" else x)
+        prefix = "{}{}{{".format(">" if clause == c1 else " ",
+                                 ">" if clause == c2 else " ")
+        print(prefix,
+              ", ".join("{0:>{1}}".format(x, w) for x in sorted_clauses),
+              "}",
+              sep = "")
     print("}")
 
 class Node(object):
@@ -53,12 +69,14 @@ class Node(object):
     def __repr__(self):
         return "{R: " + self.root + ", C: " + str(self.children) + "}"
 
-# Procedure -------------------------------------------------------------------
+# Procedures ------------------------------------------------------------------
 
-def parse(astr):
+def parse(astr, output):
     # Taken from Norvig's "(How to Write a (Lisp) Interpreter (in Python))"
     tokens = astr.replace("(", " ( ") \
                  .replace(")", " ) ") \
+                 .replace("->", "=>") \
+                 .replace("<->", "<=>") \
                  .replace("-", " - ") \
                  .split()
     tokens.insert(0, "(")
@@ -67,10 +85,11 @@ def parse(astr):
     out_stack = []
 
     for token in tokens:
-        print(token)
-        print(out_stack)
-        print(op_stack)
-        print("---")
+        if output:
+            print(token)
+            print(out_stack)
+            print(op_stack)
+            print("---")
 
         if is_term(token):
             out_stack.append(token)
@@ -98,8 +117,9 @@ def parse(astr):
                         raise ParseException("Invalid format")
                 else:
                     try:
-                        print(op_stack)
-                        print(out_stack)
+                        if output:
+                            print(op_stack)
+                            print(out_stack)
                         out_stack.append(Node(op_stack.pop(),
                                              [Node(out_stack.pop()),
                                               Node(out_stack.pop())][::-1]))
@@ -192,7 +212,7 @@ def clauses(node, sets=[]):
         for n in node.children:
             add_clause(n, l)
         if l not in sets: sets.append(l)
-    elif is_term(node.root):
+    elif is_term(node.root) or node.root[0] == "-":
         l = set()
         add_clause(node, l)
         if l not in sets: sets.append(l)
@@ -219,50 +239,82 @@ def cnfize(ast):
 
     return clauses(ast)
 
-def negation(term):
-    if term[0] == "-":
-        return term[1:]
-    else:
-        return "-" + term
-
-def resolve(clauses):
-    print("---")
+def optimise(clauses):
     # Try to resolve smaller clauses first
     clauses = sorted(clauses, key=len)
+
+    print_header("Subsumption")
+
+    # Subsumption
+    for i, c1 in enumerate(clauses):
+        for c2 in clauses[i + 1:]:
+            if c1.issubset(c2):
+                clauses.remove(c2)
+
+    print_clauses(clauses)
+
+def resolve(clauses):
     for i, c1 in enumerate(clauses):
         for t1 in c1:
             for c2 in clauses[i:]:
                 for t2 in c2:
                     if negation(t1) == t2:
                         resolvent = c1.union(c2).difference({t1, t2})
-                        if resolvent == set():
-                            return True
-                        elif resolvent not in clauses:
-                            print_clauses(clauses)
-                            print(longest_term(clauses))
-                            print("res", resolvent)
+                        if resolvent not in clauses:
+                            print_clauses(clauses, c1, c2)
+                            print()
+                            print("T1:", t1, "|",
+                                  "T2:", t2, "|",
+                                  "R:", resolvent if resolvent != set()
+                                                  else "{}")
+                            print()
+                            print("--------------")
+                            print()
                             clauses.append(resolvent)
-                            print("t1", t1)
-                            print("t2", t2)
-                            print("c1", c1)
-                            print("c2", c2)
-                            clauses.remove(c1)
-                            if c1 != c2:
-                                clauses.remove(c2)
-                            return(resolve(clauses))
-    return False
+                            if(len(c1) > 1): clauses.remove(c1)
+                            if c1 != c2 and len(c2) > 1: clauses.remove(c2)
+
+                            if resolvent == set():
+                                return "Unsatisfiable"
+                            else:
+                                return(resolve(clauses))
+    return "Satisfiable"
 
 
 def main(argv=None):
-    if argv:
-        astr = argv[0]
-        ast = parse(astr)
-        print("AST")
-        print_tree(ast)
-        print("CNFized")
-        clauses = cnfize(ast)
-        print_tree(ast)
-        print_clauses(clauses)
+    parser = argparse.ArgumentParser(description="Automated theorem prover")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('prop',
+                        help="a logic formula")
+    parser.add_argument('-s',
+                        action="store_true",
+                        help="use subsumption")
+    parser.add_argument('-o',
+                        action="store_true",
+                        help="use unit preference")
+    parser.add_argument('-r',
+                        action="store_true",
+                        help="use set of support")
+    parser.add_argument('-p',
+                        action="store_true",
+                        help="show parsing steps")
+    parser.add_argument('--cnf',
+                        action="store_true",
+                        help="output CNF and exit")
+    args = parser.parse_args()
+    print(args)
+
+    if args.p: print_header("Parsing")
+    ast = parse(args.prop, args.p)
+    print_header("AST")
+    print_tree(ast)
+    print_header("CNF tree")
+    clauses = cnfize(ast)
+    print_tree(ast)
+    print_header("Clauses")
+    print_clauses(clauses)
+    if not args.cnf:
+        print_header("Resolution")
         print(resolve(clauses))
 
 if __name__ == "__main__":
