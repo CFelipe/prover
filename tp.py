@@ -10,6 +10,13 @@ class ParseException(Exception):
     def __str__(self):
         return self.msg
 
+# From https://groups.google.com/forum/#!topic/argparse-users/LazV_tEQvQw
+class ArgParser(argparse.ArgumentParser):
+    def error(self, message):
+        sys.stderr.write('error: %s\n' % message)
+        self.print_help()
+        sys.exit(2)
+
 def print_header(text):
     print("\n", "-" * len(text), sep = "")
     print(text)
@@ -53,6 +60,32 @@ def print_clauses(clauses, c1=None, c2=None):
               "}",
               sep = "")
     print("}")
+
+def save_cnf(clauses, filename):
+    clause_dict = {}
+    count = 0
+    output = []
+
+    for clause in clauses:
+        line = ''
+        for term in clause:
+            term_val = term[1:] if term[0] == "-" else term
+            if term_val not in clause_dict:
+                count += 1
+                clause_dict[term_val] = count
+                line += ("-" if term[0] == "-" else "") + \
+                        str(count) + " "
+            else:
+                line += ("-" if term[0] == "-" else "") + \
+                        str(clause_dict[term_val]) + " "
+        output.append(line + '0')
+    output = "\n".join(output)
+    output = " ".join(["p cnf",
+                       str(len(clause_dict)),
+                       str(len(clauses))]) + "\n" + output
+
+    with open(filename, 'w') as f:
+        f.write(output)
 
 class Node(object):
     def __init__(self, root, children=[]):
@@ -98,6 +131,9 @@ def parse(astr, output):
         elif is_op(token):
             while op_stack and op_stack[-1] == "-":
                 try:
+                    if output:
+                        print(op_stack)
+                        print(out_stack)
                     out_stack.append(Node(op_stack.pop(),
                                     [Node(out_stack.pop())]))
                 except:
@@ -111,6 +147,9 @@ def parse(astr, output):
             while op_stack and op_stack[-1] != "(":
                 if op_stack[-1] == "-":
                     try:
+                        if output:
+                            print(op_stack)
+                            print(out_stack)
                         out_stack.append(Node(op_stack.pop(),
                                               [Node(out_stack.pop())]))
                     except:
@@ -135,12 +174,18 @@ def parse(astr, output):
 
     while op_stack:
         if op_stack[-1] != '(':
+            if output:
+                print(op_stack)
+                print(out_stack)
             out_stack.append(op_stack.pop())
         else:
             raise ParseException("Mismatched parenthesis")
 
     if len(out_stack) == 1:
         if type(out_stack[0]) == str:
+            if output:
+                print(op_stack)
+                print(out_stack)
             out_stack.append(Node(out_stack.pop(), []))
         return out_stack[0]
     else:
@@ -239,19 +284,23 @@ def cnfize(ast):
 
     return clauses(ast)
 
-def optimise(clauses):
+def optimise(clauses, subsume=False, order=False):
     # Try to resolve smaller clauses first
-    clauses = sorted(clauses, key=len)
+    if order:
+        print_header("Ordering")
+        clauses = sorted(clauses, key=len)
+        print_clauses(clauses)
 
-    print_header("Subsumption")
 
     # Subsumption
-    for i, c1 in enumerate(clauses):
-        for c2 in clauses[i + 1:]:
-            if c1.issubset(c2):
-                clauses.remove(c2)
-
-    print_clauses(clauses)
+    if subsume:
+        for i, c1 in enumerate(sorted(clauses)):
+            for c2 in sorted(clauses)[i + 1:]:
+                print(c1, c2)
+                if c1.issubset(c2) and c1 != c2:
+                    print("\nSubsumption step")
+                    print("c1:", c1, " | ", "c2:", c2)
+                    clauses.remove(c2)
 
 def resolve(clauses):
     for i, c1 in enumerate(clauses):
@@ -282,9 +331,8 @@ def resolve(clauses):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Automated theorem prover")
-    parser = argparse.ArgumentParser()
-    parser.add_argument('prop',
+    parser = ArgParser(description="Automated theorem prover")
+    parser.add_argument('formula',
                         help="a logic formula")
     parser.add_argument('-s',
                         action="store_true",
@@ -301,11 +349,16 @@ def main(argv=None):
     parser.add_argument('--cnf',
                         action="store_true",
                         help="output CNF and exit")
+    parser.add_argument('--save',
+                        nargs="?",
+                        const="cnf",
+                        metavar="filename",
+                        help="save CNF in DIMACS format")
     args = parser.parse_args()
     print(args)
 
     if args.p: print_header("Parsing")
-    ast = parse(args.prop, args.p)
+    ast = parse(args.formula, args.p)
     print_header("AST")
     print_tree(ast)
     print_header("CNF tree")
@@ -313,6 +366,11 @@ def main(argv=None):
     print_tree(ast)
     print_header("Clauses")
     print_clauses(clauses)
+    optimise(clauses, args.s, args.o)
+
+    if args.save:
+        save_cnf(clauses, args.save + ".cnf")
+
     if not args.cnf:
         print_header("Resolution")
         print(resolve(clauses))
