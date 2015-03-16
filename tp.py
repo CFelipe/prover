@@ -4,90 +4,9 @@ import sys
 
 # Helpers ---------------------------------------------------------------------
 
-class ParseException(Exception):
-    def __init__(self, msg):
-        self.msg = msg
-    def __str__(self):
-        return self.msg
-
-# From https://groups.google.com/forum/#!topic/argparse-users/LazV_tEQvQw
-class ArgParser(argparse.ArgumentParser):
-    def error(self, message):
-        sys.stderr.write('error: %s\n' % message)
-        self.print_help()
-        sys.exit(2)
-
-def print_header(text):
-    print("\n", "-" * len(text), sep = "")
-    print(text)
-    print("-" * len(text), "\n", sep = "")
-
-def is_op(t):
-    return t in ["<=>", "=>", "|", "&"]
-
-def is_term(t):
-    return re.match(r"[A-Z]+[0-9]*", t) is not None
-
-def print_tree(node, level = 0):
-    if node is not None:
-        print("." * 4 * level + node.root)
-        for n in node.children:
-            print_tree(n, level + 1)
-
-def negation(term):
-    if term[0] == "-":
-        return term[1:]
-    else:
-        return "-" + term
-
-def longest_term(clauses):
-    longest = 0
-    for clause in clauses:
-        for term in clause:
-            if len(term) > longest: longest = len(term)
-    return longest
-
-def print_clauses(clauses, c1=None, c2=None):
-    print("{")
-    w = longest_term(clauses)
-    for clause in clauses:
-        sorted_clauses = sorted(clause,
-                                key = lambda x: x[1:] if x[0] == "-" else x)
-        prefix = "{}{}{{".format(">" if clause == c1 else " ",
-                                 ">" if clause == c2 else " ")
-        print(prefix,
-              ", ".join("{0:>{1}}".format(x, w) for x in sorted_clauses),
-              "}",
-              sep = "")
-    print("}")
-
-def save_cnf(clauses, filename):
-    clause_dict = {}
-    count = 0
-    output = []
-
-    for clause in clauses:
-        line = ''
-        for term in clause:
-            term_val = term[1:] if term[0] == "-" else term
-            if term_val not in clause_dict:
-                count += 1
-                clause_dict[term_val] = count
-                line += ("-" if term[0] == "-" else "") + \
-                        str(count) + " "
-            else:
-                line += ("-" if term[0] == "-" else "") + \
-                        str(clause_dict[term_val]) + " "
-        output.append(line + '0')
-    output = "\n".join(output)
-    output = " ".join(["p cnf",
-                       str(len(clause_dict)),
-                       str(len(clauses))]) + "\n" + output
-
-    with open(filename, 'w') as f:
-        f.write(output)
-
 class Node(object):
+    """Tree data structure for AST"""
+
     def __init__(self, root, children=[]):
         if type(root) == str:
             self.root = root
@@ -102,10 +21,92 @@ class Node(object):
     def __repr__(self):
         return "{R: " + self.root + ", C: " + str(self.children) + "}"
 
+
+class ParseException(Exception):
+    """Print errors found parsing the formula"""
+
+    def __init__(self, msg):
+        self.msg = msg
+    def __str__(self):
+        return self.msg
+
+# From https://groups.google.com/forum/#!topic/argparse-users/LazV_tEQvQw
+class ArgParser(argparse.ArgumentParser):
+    """Makes the program show help if no formula is given"""
+
+    def error(self, message):
+        sys.stderr.write('error: %s\n' % message)
+        self.print_help()
+        sys.exit(2)
+
+def print_header(text):
+    """Prints a fancy header"""
+
+    print("\n", "-" * len(text), sep = "")
+    print(text)
+    print("-" * len(text), "\n", sep = "")
+
+def is_op(t):
+    """Returns True if the argument is an operator, False otherwise"""
+
+    return t in ["<=>", "=>", "|", "&"]
+
+def is_term(t):
+    """Returns True if the argument is a term as described in the assignment,
+    False otherwise"""
+
+    return re.match(r"[A-Z]+[0-9]*", t) is not None
+
+def print_tree(node, level = 0):
+    """Prints a tree in pre-order"""
+
+    if node is not None:
+        print("." * 4 * level + node.root)
+        for n in node.children:
+            print_tree(n, level + 1)
+
+def negation(term):
+    """Returns the negation of a term as a string"""
+
+    if term[0] == "-":
+        return term[1:]
+    else:
+        return "-" + term
+
+def longest_term(clauses):
+    """Returns the longest term string length to make printing formatting
+    better"""
+
+    longest = 0
+    for clause in clauses:
+        for term in clause:
+            if len(term) > longest: longest = len(term)
+    return longest
+
+def print_clauses(clauses, c1=None, c2=None):
+    """Prints clauses in a nice format, ordered alphabetically"""
+
+    print("{")
+    w = longest_term(clauses)
+    for clause in clauses:
+        sorted_clauses = sorted(clause,
+                                key = lambda x: x[1:] if x[0] == "-" else x)
+        prefix = "{}{}{{".format(">" if clause == c1 else " ",
+                                 ">" if clause == c2 else " ")
+        print(prefix,
+              ", ".join("{0:>{1}}".format(x, w) for x in sorted_clauses),
+              "}",
+              sep = "")
+    print("}")
+
 # Procedures ------------------------------------------------------------------
 
 def parse(astr, output):
-    # Taken from Norvig's "(How to Write a (Lisp) Interpreter (in Python))"
+    """Parses input using the Shunting-yard algorithm transforming it into an
+    AST"""
+
+    # Replacement snippet taken from Norvig's "(How to Write a (Lisp)
+    # Interpreter (in Python))"
     tokens = astr.replace("(", " ( ") \
                  .replace(")", " ) ") \
                  .replace("->", "=>") \
@@ -249,6 +250,8 @@ def trav3(node):
         trav3(n)
 
 def clauses(node, sets=[]):
+    """Transforms tree nodes into clauses"""
+
     if node.root == "&":
         for n in node.children:
             clauses(n, sets)
@@ -265,6 +268,8 @@ def clauses(node, sets=[]):
     return sets
 
 def add_clause(node, clauses):
+    """Transforms tree nodes into clauses if parent is a disjunction"""
+
     if is_term(node.root):
         clauses.add(node.root)
     elif node.root == "-":
@@ -278,6 +283,8 @@ def add_clause(node, clauses):
         print(node.root)
 
 def cnfize(ast):
+    """Transforms an AST into clauses"""
+
     trav1(ast)
     trav2(ast)
     trav3(ast)
@@ -285,6 +292,8 @@ def cnfize(ast):
     return clauses(ast)
 
 def optimise(clauses, subsume=False, order=False):
+    """Applies optimisation rules before the resolution procedure"""
+
     # Try to resolve smaller clauses first
     if order:
         print_header("Ordering")
@@ -303,6 +312,9 @@ def optimise(clauses, subsume=False, order=False):
                     clauses.remove(c2)
 
 def resolve(clauses):
+    """Applies the resolution rule repeatedly, returning either Satisfiable or
+    Unsatisfiable"""
+
     for i, c1 in enumerate(clauses):
         for t1 in c1:
             for c2 in clauses[i:]:
@@ -329,20 +341,46 @@ def resolve(clauses):
                                 return(resolve(clauses))
     return "Satisfiable"
 
+def save_cnf(clauses, filename):
+    """Saves clauses to a file in the DIMACS format"""
+
+    clause_dict = {}
+    count = 0
+    output = []
+
+    for clause in sorted(clauses, key=len):
+        line = ''
+        for term in sorted(clause,
+                           key = lambda x: x[1:] if x[0] == "-" else x):
+            term_val = term[1:] if term[0] == "-" else term
+            if term_val not in clause_dict:
+                count += 1
+                clause_dict[term_val] = count
+                line += ("-" if term[0] == "-" else "") + \
+                        str(count) + " "
+            else:
+                line += ("-" if term[0] == "-" else "") + \
+                        str(clause_dict[term_val]) + " "
+        output.append(line + '0')
+    output = "\n".join(output)
+    output = " ".join(["p cnf",
+                       str(len(clause_dict)),
+                       str(len(clauses))]) + "\n" + output
+
+    with open(filename, 'w') as f:
+        f.write(output + "\n")
+
 
 def main(argv=None):
     parser = ArgParser(description="Automated theorem prover")
     parser.add_argument('formula',
-                        help="a logic formula")
+                        help="a logic formula - surround it with quotes!")
     parser.add_argument('-s',
                         action="store_true",
                         help="use subsumption")
     parser.add_argument('-o',
                         action="store_true",
                         help="use unit preference")
-    parser.add_argument('-r',
-                        action="store_true",
-                        help="use set of support")
     parser.add_argument('-p',
                         action="store_true",
                         help="show parsing steps")
@@ -355,7 +393,6 @@ def main(argv=None):
                         metavar="filename",
                         help="save CNF in DIMACS format")
     args = parser.parse_args()
-    print(args)
 
     if args.p: print_header("Parsing")
     ast = parse(args.formula, args.p)
